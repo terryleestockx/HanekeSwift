@@ -179,12 +179,12 @@ open class Cache<T: DataConvertible> where T.Result == T, T : DataRepresentable 
 
     open var formats : [String : (Format<T>, NSCache<AnyObject, AnyObject>, DiskCache)] = [:]
     
-    open func addFormat(_ format : Format<T>) {
+    open func addFormat(_ format : Format<T>, memoryCache: NSCache<AnyObject, AnyObject>? = nil) {
         let name = format.name
         let formatPath = self.formatPath(withFormatName: name)
-        let memoryCache = NSCache<AnyObject, AnyObject>()
+        let memCache = memoryCache ?? NSCache<AnyObject, AnyObject>()
         let diskCache = DiskCache(path: formatPath, capacity : format.diskCapacity)
-        self.formats[name] = (format, memoryCache, diskCache)
+        self.formats[name] = (format, memCache, diskCache)
     }
     
     // MARK: Internal
