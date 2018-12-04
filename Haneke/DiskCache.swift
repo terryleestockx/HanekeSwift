@@ -10,6 +10,8 @@ import Foundation
 
 open class DiskCache {
     
+    public var config = Config()
+    
     open class func basePath() -> String {
         let cachesPath = NSSearchPathForDirectoriesInDomains(FileManager.SearchPathDirectory.cachesDirectory, FileManager.SearchPathDomainMask.userDomainMask, true)[0]
         let hanekePathComponent = HanekeGlobals.Domain
@@ -154,16 +156,7 @@ open class DiskCache {
     }
     
     fileprivate func controlCapacity() {
-        if self.size <= self.capacity { return }
-        
-        let fileManager = FileManager.default
-        let cachePath = self.path
-        fileManager.enumerateContentsOfDirectory(atPath: cachePath, orderedByProperty: URLResourceKey.contentModificationDateKey.rawValue, ascending: true) { (URL : URL, _, stop : inout Bool) -> Void in
-            
-            self.removeFile(atPath: URL.path)
-
-            stop = self.size <= self.capacity
-        }
+        config.capacityStrategy(self, FileManager.default)
     }
     
     fileprivate func setDataSync(_ data: Data, key: String) {
@@ -227,7 +220,35 @@ open class DiskCache {
             self.size = 0
         }
     }
+    
+    public func removeFiles(for paths: [String]) {
+        paths.forEach { self.removeFile(atPath: $0) }
+    }
 }
+
+// MARK: - Config
+
+
+/// A cache invalidation strategy that deletes oldest files when cache is over capacity
+public let deleteItemsOverCapacity: (DiskCache, FileManager) -> Void  = { diskCache, fileManager in
+    if diskCache.size <= diskCache.capacity { return }
+    
+    let cachePath = diskCache.path
+    fileManager.enumerateContentsOfDirectory(atPath: cachePath, orderedByProperty: URLResourceKey.contentModificationDateKey.rawValue, ascending: true) { (URL : URL, _, stop : inout Bool) -> Void in
+        
+        diskCache.removeFile(atPath: URL.path)
+        
+        stop = diskCache.size <= diskCache.capacity
+    }
+}
+
+extension DiskCache {
+    public struct Config {
+        var capacityStrategy: (DiskCache, FileManager) -> Void = defaultDiskCapacityStrategy
+    }
+}
+
+// MARK: - Private
 
 private func isNoSuchFileError(_ error : Error?) -> Bool {
     if let error = error {

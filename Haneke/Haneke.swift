@@ -53,3 +53,13 @@ func errorWithCode(_ code: Int, description: String) -> Error {
     let userInfo = [NSLocalizedDescriptionKey: description]
     return NSError(domain: HanekeGlobals.Domain, code: code, userInfo: userInfo) as Error
 }
+
+internal var defaultDiskCapacityStrategy = deleteItemsOverCapacity
+
+
+/// Set the module wide default disk cache invalidation strategy
+///
+/// - Parameter strategy: new disk cache invalidation strategy
+public func setDefaultDiskCapacityStrategy(_ strategy: @escaping (DiskCache, FileManager) -> Void) {
+    defaultDiskCapacityStrategy = strategy
+}
