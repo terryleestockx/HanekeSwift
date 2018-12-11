@@ -12,7 +12,16 @@ public struct HanekeGlobals {
     
     public static let Domain = "io.haneke"
     
+    /// Set the module wide default disk cache invalidation strategy
+    ///
+    /// - Parameter strategy: new disk cache invalidation strategy
+    public static func setDefaultDiskCapacityStrategy(_ strategy: @escaping (DiskCache, FileManager) -> Void) {
+        defaultDiskCapacityStrategy = strategy
+    }
+    
 }
+
+internal var defaultDiskCapacityStrategy = DiskCache.Invalidation.deleteItemsOverCapacity
 
 public struct Shared {
     
