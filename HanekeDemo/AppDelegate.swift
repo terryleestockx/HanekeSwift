@@ -17,7 +17,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         
-        setDefaultDiskCapacityStrategy { diskCache, fileManager in
+        Shared.setDefaultDiskCapacityStrategy { diskCache, fileManager in
             deleteItemsOverCapacity(diskCache, fileManager)
             
             let cachePath = diskCache.path
