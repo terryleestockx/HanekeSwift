@@ -228,21 +228,36 @@ open class DiskCache {
 
 // MARK: - Config
 
-
-/// A cache invalidation strategy that deletes oldest files when cache is over capacity
-public let deleteItemsOverCapacity: (DiskCache, FileManager) -> Void  = { diskCache, fileManager in
-    if diskCache.size <= diskCache.capacity { return }
-    
-    let cachePath = diskCache.path
-    fileManager.enumerateContentsOfDirectory(atPath: cachePath, orderedByProperty: URLResourceKey.contentModificationDateKey.rawValue, ascending: true) { (URL : URL, _, stop : inout Bool) -> Void in
-        
-        diskCache.removeFile(atPath: URL.path)
-        
-        stop = diskCache.size <= diskCache.capacity
-    }
-}
-
 extension DiskCache {
+    
+    public struct Invalidation {
+        
+        public static let deleteItemsOverCapacity: (DiskCache, FileManager) -> Void  = { diskCache, fileManager in
+            if diskCache.size <= diskCache.capacity { return }
+            
+            let cachePath = diskCache.path
+            fileManager.enumerateContentsOfDirectory(atPath: cachePath, orderedByProperty: URLResourceKey.contentModificationDateKey.rawValue, ascending: true) { (URL : URL, _, stop : inout Bool) -> Void in
+                
+                diskCache.removeFile(atPath: URL.path)
+                
+                stop = diskCache.size <= diskCache.capacity
+            }
+        }
+        
+        public static func deleteItemsCreatedBefore(_ date: Date) -> (DiskCache, FileManager) -> Void {
+            return { diskCache, fileManager in
+                let cachePath = diskCache.path
+                
+                guard let paths = try? fileManager.directoryContents(at: URL(string: cachePath)!, before: date)
+                    .compactMap({ $0.path }), paths.count > 0 else {
+                        return
+                }
+                
+                diskCache.removeFiles(for: paths)
+            }
+        }
+    }
+    
     public struct Config {
         var capacityStrategy: (DiskCache, FileManager) -> Void = defaultDiskCapacityStrategy
     }
@@ -255,4 +270,25 @@ private func isNoSuchFileError(_ error : Error?) -> Bool {
         return NSCocoaErrorDomain == (error as NSError).domain && (error as NSError).code == NSFileReadNoSuchFileError
     }
     return false
+}
+
+private extension FileManager {
+    func directoryContents(at url: URL) throws -> [URL] {
+        return try contentsOfDirectory(at: url,
+                                       includingPropertiesForKeys: nil,
+                                       options: [.skipsHiddenFiles])
+        
+    }
+    
+    func directoryContents(at url: URL, before date: Date) throws -> [URL] {
+        return try directoryContents(at: url).filter({ u in
+            let attributes = try attributesOfItem(atPath: u.path)
+            
+            guard let creationDate = attributes[.creationDate] as? Date else {
+                return true
+            }
+            
+            return creationDate < date
+        })
+    }
 }

@@ -17,46 +17,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         
-        Shared.setDefaultDiskCapacityStrategy { diskCache, fileManager in
-            deleteItemsOverCapacity(diskCache, fileManager)
-            
-            let cachePath = diskCache.path
+        HanekeGlobals.setDefaultDiskCapacityStrategy { diskCache, fileManager in
+            DiskCache.Invalidation.deleteItemsOverCapacity(diskCache, fileManager)
             
             let calendar = Calendar.current
-            let targetDate = calendar.date(byAdding: .minute, value: -1, to: Date())!
-            
-            guard let paths = try? fileManager.directoryContents(at: URL(string: cachePath)!, before: targetDate)
-                .compactMap({ $0.path }), paths.count > 0 else {
+            guard let invalidationDate = calendar.date(byAdding: .minute, value: -1, to: Date()) else {
                 return
             }
             
-            diskCache.removeFiles(for: paths)
-            print("\(paths.count) old files have been removed")
-            return
+            DiskCache.Invalidation.deleteItemsCreatedBefore(invalidationDate)(diskCache, fileManager)
+           
         }
         
         return true
-    }
-}
-
-
-private extension FileManager {
-    func directoryContents(at url: URL) throws -> [URL] {
-        return try contentsOfDirectory(at: url,
-                                        includingPropertiesForKeys: nil,
-                                        options: [.skipsHiddenFiles])
-        
-    }
-    
-    func directoryContents(at url: URL, before date: Date) throws -> [URL] {
-        return try directoryContents(at: url).filter({ u in
-            let attributes = try attributesOfItem(atPath: u.path)
-            
-            guard let creationDate = attributes[.creationDate] as? Date else {
-                return true
-            }
-            
-            return creationDate < date
-        })
     }
 }

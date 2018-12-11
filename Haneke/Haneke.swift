@@ -21,7 +21,7 @@ public struct HanekeGlobals {
     
 }
 
-internal var defaultDiskCapacityStrategy = deleteItemsOverCapacity
+internal var defaultDiskCapacityStrategy = DiskCache.Invalidation.deleteItemsOverCapacity
 
 public struct Shared {
     
