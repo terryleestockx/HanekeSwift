@@ -25,7 +25,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 return
             }
             
-            DiskCache.Invalidation.deleteItemsCreatedBefore(invalidationDate)(diskCache, fileManager)
+            DiskCache.Invalidation.deleteItemsAddedBefore(invalidationDate)(diskCache, fileManager)
            
         }
         

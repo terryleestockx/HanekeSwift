@@ -232,6 +232,8 @@ extension DiskCache {
     
     public struct Invalidation {
         
+        
+        /// A cache invalidation strategy that deletes oldest files when cache is over capacity
         public static let deleteItemsOverCapacity: (DiskCache, FileManager) -> Void  = { diskCache, fileManager in
             if diskCache.size <= diskCache.capacity { return }
             
@@ -244,11 +246,18 @@ extension DiskCache {
             }
         }
         
-        public static func deleteItemsCreatedBefore(_ date: Date) -> (DiskCache, FileManager) -> Void {
+        
+        /// A cache invalidation strategy that deletes files before a specific date, and a way to interpret the meaning of that date
+        ///
+        /// - Parameters:
+        ///   - date: target date
+        ///   - semantic: meaning of date
+        public static func deleteItemsAddedBefore(_ date: Date, with semantic: FileDateSemantic = .creationDate) -> (DiskCache, FileManager) -> Void {
             return { diskCache, fileManager in
                 let cachePath = diskCache.path
                 
-                guard let paths = try? fileManager.directoryContents(at: URL(string: cachePath)!, before: date)
+                guard let url = URL(string: cachePath),
+                    let paths = try? fileManager.directoryContents(at: url, with: semantic, before: date)
                     .compactMap({ $0.path }), paths.count > 0 else {
                         return
                 }
@@ -272,6 +281,19 @@ private func isNoSuchFileError(_ error : Error?) -> Bool {
     return false
 }
 
+public enum FileDateSemantic {
+    case creationDate, modificationDate
+    
+    public var attribute: FileAttributeKey {
+        switch self {
+        case .creationDate:
+            return .creationDate
+        case .modificationDate:
+            return .modificationDate
+        }
+    }
+}
+
 private extension FileManager {
     func directoryContents(at url: URL) throws -> [URL] {
         return try contentsOfDirectory(at: url,
@@ -280,11 +302,11 @@ private extension FileManager {
         
     }
     
-    func directoryContents(at url: URL, before date: Date) throws -> [URL] {
+    func directoryContents(at url: URL, with semantic: FileDateSemantic,  before date: Date) throws -> [URL] {
         return try directoryContents(at: url).filter({ u in
             let attributes = try attributesOfItem(atPath: u.path)
             
-            guard let creationDate = attributes[.creationDate] as? Date else {
+            guard let creationDate = attributes[semantic.attribute] as? Date else {
                 return true
             }
             
