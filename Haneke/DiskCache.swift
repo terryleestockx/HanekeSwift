@@ -10,6 +10,8 @@ import Foundation
 
 open class DiskCache {
     
+    public var config = Config()
+    
     open class func basePath() -> String {
         let cachesPath = NSSearchPathForDirectoriesInDomains(FileManager.SearchPathDirectory.cachesDirectory, FileManager.SearchPathDomainMask.userDomainMask, true)[0]
         let hanekePathComponent = HanekeGlobals.Domain
@@ -55,7 +57,7 @@ open class DiskCache {
         })
     }
     
-    @discardableResult open func fetchData(key: String, failure fail: ((Error?) -> ())? = nil, success succeed: @escaping (Data) -> ()) {
+    open func fetchData(key: String, failure fail: ((Error?) -> ())? = nil, success succeed: @escaping (Data) -> ()) {
         cacheQueue.async {
             let path = self.path(forKey: key)
             do {
@@ -123,7 +125,7 @@ open class DiskCache {
 
     open func path(forKey key: String) -> String {
         let escapedFilename = key.escapedFilename()
-        let filename = escapedFilename.characters.count < Int(NAME_MAX) ? escapedFilename : key.MD5Filename()
+        let filename = escapedFilename.count < Int(NAME_MAX) ? escapedFilename : key.MD5Filename()
         let keyPath = (self.path as NSString).appendingPathComponent(filename)
         return keyPath
     }
@@ -154,16 +156,7 @@ open class DiskCache {
     }
     
     fileprivate func controlCapacity() {
-        if self.size <= self.capacity { return }
-        
-        let fileManager = FileManager.default
-        let cachePath = self.path
-        fileManager.enumerateContentsOfDirectory(atPath: cachePath, orderedByProperty: URLResourceKey.contentModificationDateKey.rawValue, ascending: true) { (URL : URL, _, stop : inout Bool) -> Void in
-            
-            self.removeFile(atPath: URL.path)
-
-            stop = self.size <= self.capacity
-        }
+        config.capacityStrategy(self, FileManager.default)
     }
     
     fileprivate func setDataSync(_ data: Data, key: String) {
@@ -227,11 +220,97 @@ open class DiskCache {
             self.size = 0
         }
     }
+    
+    public func removeFiles(for paths: [String]) {
+        paths.forEach { self.removeFile(atPath: $0) }
+    }
 }
+
+// MARK: - Config
+
+extension DiskCache {
+    
+    public struct Invalidation {
+        
+        
+        /// A cache invalidation strategy that deletes oldest files when cache is over capacity
+        public static let deleteItemsOverCapacity: (DiskCache, FileManager) -> Void  = { diskCache, fileManager in
+            if diskCache.size <= diskCache.capacity { return }
+            
+            let cachePath = diskCache.path
+            fileManager.enumerateContentsOfDirectory(atPath: cachePath, orderedByProperty: URLResourceKey.contentModificationDateKey.rawValue, ascending: true) { (URL : URL, _, stop : inout Bool) -> Void in
+                
+                diskCache.removeFile(atPath: URL.path)
+                
+                stop = diskCache.size <= diskCache.capacity
+            }
+        }
+        
+        
+        /// A cache invalidation strategy that deletes files before a specific date, and a way to interpret the meaning of that date
+        ///
+        /// - Parameters:
+        ///   - date: target date
+        ///   - semantic: meaning of date
+        public static func deleteItemsAddedBefore(_ date: Date, with semantic: FileDateSemantic = .creationDate) -> (DiskCache, FileManager) -> Void {
+            return { diskCache, fileManager in
+                let cachePath = diskCache.path
+                
+                guard let url = URL(string: cachePath),
+                    let paths = try? fileManager.directoryContents(at: url, with: semantic, before: date)
+                    .compactMap({ $0.path }), paths.count > 0 else {
+                        return
+                }
+                
+                diskCache.removeFiles(for: paths)
+            }
+        }
+    }
+    
+    public struct Config {
+        var capacityStrategy: (DiskCache, FileManager) -> Void = defaultDiskCapacityStrategy
+    }
+}
+
+// MARK: - Private
 
 private func isNoSuchFileError(_ error : Error?) -> Bool {
     if let error = error {
         return NSCocoaErrorDomain == (error as NSError).domain && (error as NSError).code == NSFileReadNoSuchFileError
     }
     return false
+}
+
+public enum FileDateSemantic {
+    case creationDate, modificationDate
+    
+    public var attribute: FileAttributeKey {
+        switch self {
+        case .creationDate:
+            return .creationDate
+        case .modificationDate:
+            return .modificationDate
+        }
+    }
+}
+
+private extension FileManager {
+    func directoryContents(at url: URL) throws -> [URL] {
+        return try contentsOfDirectory(at: url,
+                                       includingPropertiesForKeys: nil,
+                                       options: [.skipsHiddenFiles])
+        
+    }
+    
+    func directoryContents(at url: URL, with semantic: FileDateSemantic,  before date: Date) throws -> [URL] {
+        return try directoryContents(at: url).filter({ u in
+            let attributes = try attributesOfItem(atPath: u.path)
+            
+            guard let creationDate = attributes[semantic.attribute] as? Date else {
+                return true
+            }
+            
+            return creationDate < date
+        })
+    }
 }

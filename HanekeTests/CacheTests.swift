@@ -17,7 +17,7 @@ class CacheTests: XCTestCase {
     
     override func setUp() {
         super.setUp()
-        sut = Cache<Data>(name: self.name!)
+        sut = Cache<Data>(name: self.name)
     }
     
     override func tearDown() {
@@ -41,7 +41,7 @@ class CacheTests: XCTestCase {
     }
     
     func testDeinit() {
-        weak var _ = Cache<UIImage>(name: self.name!)
+        weak var _ = Cache<UIImage>(name: self.name)
     }
     
     // MARK: CachePath
@@ -54,7 +54,7 @@ class CacheTests: XCTestCase {
     // MARK: formatPath
     
     func testFormatPath() {
-        let formatName = self.name!
+        let formatName = self.name
         let expectedFormatPath = (sut.cachePath as NSString).appendingPathComponent(formatName)
         
         let formatPath = sut.formatPath(withFormatName: formatName)
@@ -74,7 +74,7 @@ class CacheTests: XCTestCase {
     // MARK: addFormat
     
     func testAddFormat() {
-        let format = Format<Data>(name: self.name!)
+        let format = Format<Data>(name: self.name)
         
         sut.addFormat(format)
     }
@@ -84,11 +84,11 @@ class CacheTests: XCTestCase {
     func testSize_WithOneFormat() {
         let data = Data.dataWithLength(6)
         let key = self.name
-        let format = Format<Data>(name: self.name!)
+        let format = Format<Data>(name: self.name)
         sut.addFormat(format)
 
         var finished = false
-        sut.set(value: data, key: key!, formatName : format.name, success: { _ in
+        sut.set(value: data, key: key, formatName : format.name, success: { _ in
             finished = true
         })
 
@@ -99,7 +99,7 @@ class CacheTests: XCTestCase {
     func testSize_WithTwoFormats() {
         let lengths = [4, 7]
         let formats = (0..<lengths.count).map { (index: Int) -> Format<Data> in
-            let formatName = self.name! + String(index)
+            let formatName = self.name + String(index)
             return Format<Data>(name: formatName)
         }
         formats.forEach(sut.addFormat)
@@ -110,7 +110,7 @@ class CacheTests: XCTestCase {
             let key = self.name
 
             var finished = false
-            sut.set(value: data, key: key!, formatName : format.name, success: { _ in
+            sut.set(value: data, key: key, formatName : format.name, success: { _ in
                 finished = true
             })
 
@@ -123,13 +123,13 @@ class CacheTests: XCTestCase {
     // MARK: set
     
     func testSet_WithIdentityFormat_ExpectSyncSuccess() {
-        let sut = Cache<Data>(name: self.name!)
+        let sut = Cache<Data>(name: self.name)
         let data = Data.dataWithLength(5)
-        let key = self.name!
-        let expectation = self.expectation(description: self.name!)
+        let key = self.name
+        let expectation = self.expectation(description: self.name)
         
         sut.set(value: data, key: key, success: {
-            XCTAssertTrue($0 == data)
+            XCTAssertEqual($0, data)
             expectation.fulfill()
         })
         
@@ -139,14 +139,14 @@ class CacheTests: XCTestCase {
     func testSet_WithCustomFormat_ExpectAsyncSuccess () {
         let data = Data.dataWithLength(6)
         let expectedData = Data.dataWithLength(7)
-        let key = self.name!
-        let format = Format<Data>(name: self.name!, transform: { _ in return expectedData })
+        let key = self.name
+        let format = Format<Data>(name: self.name, transform: { _ in return expectedData })
         sut.addFormat(format)
-        let expectation = self.expectation(description: self.name!)
+        let expectation = self.expectation(description: self.name)
         
         var finished = false
         sut.set(value: data, key: key, formatName : format.name, success: {
-            XCTAssertTrue($0 == expectedData)
+            XCTAssertEqual($0, expectedData)
             expectation.fulfill()
             finished = true
         })
@@ -169,12 +169,12 @@ class CacheTests: XCTestCase {
     
     func testFetchOnSuccess_AfterSet_WithKey_ExpectSyncSuccess () {
         let data = Data.dataWithLength(8)
-        let key = self.name!
+        let key = self.name
         let expectation = self.expectation(description: key)
         sut.set(value: data, key: key)
 
         let fetch = sut.fetch(key: key).onSuccess {
-            XCTAssertTrue($0 == data)
+            XCTAssertEqual($0, data)
             expectation.fulfill()
         }
         
@@ -184,13 +184,18 @@ class CacheTests: XCTestCase {
     }
     
     func testFetchOnFailure_WithKey_ExpectAsyncFailure () {
-        let key = self.name!
+        let key = self.name
         let expectation = self.expectation(description: key)
         
         let fetch = sut.fetch(key: key).onFailure { error in
-            XCTAssertEqual(error!._domain, HanekeGlobals.Domain)
-            XCTAssertEqual(error!._code, HanekeGlobals.Cache.ErrorCode.objectNotFound.rawValue)
-            XCTAssertNotNil(error!.localizedDescription)
+            guard let error = error as NSError? else {
+                XCTFail("expected non-nil error");
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error.domain, HanekeGlobals.Domain)
+            XCTAssertEqual(error.code, HanekeGlobals.Cache.ErrorCode.objectNotFound.rawValue)
+            XCTAssertNotNil(error.localizedDescription)
             expectation.fulfill()
         }
 
@@ -201,19 +206,15 @@ class CacheTests: XCTestCase {
     
     func testFetch_AfterClearingMemoryCache_WithKey_ExpectAsyncSuccess () {
         let data = Data.dataWithLength(9)
-        let key = self.name!
+        let key = self.name
         let expectation = self.expectation(description: key)
         sut.set(value: data, key: key)
-        dump("name: \(self.name)")
         self.clearMemoryCache()
         
         let fetch = sut.fetch(key: key, failure: { _ in
             XCTFail("expected success")
             expectation.fulfill()
         }, success: {
-//            XCTAssertTrue($0 != data)
-            dump($0)
-            dump(data)
             XCTAssertEqual($0, data)
             expectation.fulfill()
         })
@@ -226,18 +227,23 @@ class CacheTests: XCTestCase {
     }
     
     func testFetch_WithKeyAndExistingFormat_ExpectAsyncFailure () {
-        let key = self.name!
+        let key = self.name
         let expectation = self.expectation(description: key)
         
         let fetch = sut.fetch(key: key, failure : { error in
-            XCTAssertEqual(error!._domain, HanekeGlobals.Domain)
-            XCTAssertEqual(error!._code, HanekeGlobals.Cache.ErrorCode.objectNotFound.rawValue)
-            XCTAssertNotNil(error!.localizedDescription)
+            guard let error = error as NSError? else {
+                XCTFail("expected non-nil error");
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error.domain, HanekeGlobals.Domain)
+            XCTAssertEqual(error.code, HanekeGlobals.Cache.ErrorCode.objectNotFound.rawValue)
+            XCTAssertNotNil(error.localizedDescription)
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             XCTFail("expected failure")
             expectation.fulfill()
-        }
+        })
         
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertFalse(fetch.hasFailed)
@@ -247,18 +253,23 @@ class CacheTests: XCTestCase {
     }
     
     func testFetch_WithKeyAndInexistingFormat_ExpectSyncFailure () {
-        let key = self.name!
+        let key = self.name
         let expectation = self.expectation(description: key)
         
         let fetch = sut.fetch(key: key, formatName: key, failure : { error in
-            XCTAssertEqual(error!._domain, HanekeGlobals.Domain)
-            XCTAssertEqual(error!._code, HanekeGlobals.Cache.ErrorCode.formatNotFound.rawValue)
-            XCTAssertNotNil(error!.localizedDescription)
+            guard let error = error as NSError? else {
+                XCTFail("expected non-nil error");
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error.domain, HanekeGlobals.Domain)
+            XCTAssertEqual(error.code, HanekeGlobals.Cache.ErrorCode.formatNotFound.rawValue)
+            XCTAssertNotNil(error.localizedDescription)
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             XCTFail("expected failure")
             expectation.fulfill()
-        }
+        })
         
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertTrue(fetch.hasFailed)
@@ -266,7 +277,7 @@ class CacheTests: XCTestCase {
     }
     
     func testFetch_AfterClearingMemoryCache_WithKeyAndFormatWithoutDiskCapacity_ExpectFailure() {
-        let key = self.name!
+        let key = self.name
         let data = Data.dataWithLength(8)
         let format = Format<Data>(name: key, diskCapacity: 0)
         sut.addFormat(format)
@@ -276,16 +287,16 @@ class CacheTests: XCTestCase {
         
         sut.fetch(key: key, formatName: format.name, failure: {_ in
             expectation.fulfill()
-            }) { _ in
-                XCTFail("expected failure")
-                expectation.fulfill()
-        }
+        }, success: { _ in
+            XCTFail("expected failure")
+            expectation.fulfill()
+        })
         
         self.waitForExpectations(timeout: 1, handler: nil)
     }
     
     func testFetch_AfterClearingMemoryCache_WithKeyAndFormatWithDiskCapacity_ExpectSuccess() {
-        let key = self.name!
+        let key = self.name
         let data = Data.dataWithLength(9)
         let format = Format<Data>(name: key)
         sut.addFormat(format)
@@ -296,20 +307,20 @@ class CacheTests: XCTestCase {
         self.sut.fetch(key: key, formatName: format.name, failure : { _ in
             XCTFail("expected success")
             expectation.fulfill()
-            }) { _ in
-                expectation.fulfill()
-        }
+        }, success: { _ in
+            expectation.fulfill()
+        })
         
         self.waitForExpectations(timeout: 1, handler: nil)
     }
     
     func testFetchOnSuccess_WithSyncFetcher_ExpectAsyncSuccess () {
         let data = Data.dataWithLength(10)
-        let fetcher = SimpleFetcher<Data>(key: self.name!, value: data)
-        let expectation = self.expectation(description: self.name!)
+        let fetcher = SimpleFetcher<Data>(key: self.name, value: data)
+        let expectation = self.expectation(description: self.name)
         
         let fetch = sut.fetch(fetcher: fetcher).onSuccess {
-            XCTAssertTrue($0 == data)
+            XCTAssertEqual($0, data)
             expectation.fulfill()
         }
         
@@ -322,25 +333,30 @@ class CacheTests: XCTestCase {
     
     func testFetchOnFailure_WithSyncFailingFetcher_ExpectAsyncFailure() {
         
-        let fetcher = FailFetcher<Data>(key: self.name!)
+        let fetcher = FailFetcher<Data>(key: self.name)
         fetcher.error = NSError(domain: "test", code: 376, userInfo: nil)
-        let expectation = self.expectation(description: self.name!)
+        let expectation = self.expectation(description: self.name)
         
         let fetch = sut.fetch(fetcher: fetcher).onFailure { error in
-            XCTAssertEqual(error!.localizedDescription, fetcher.error.localizedDescription)
+            guard let error = error as NSError? else {
+                XCTFail("expected non-nil error");
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error.localizedDescription, fetcher.error.localizedDescription)
             expectation.fulfill()
         }
         
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertFalse(fetch.hasFailed)
-//        self.waitForExpectations(timeout: 1, handler: nil)
+        self.waitForExpectations(timeout: 1, handler: nil)
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertTrue(fetch.hasFailed)
     }
     
     func testFetch_AfterSet_WithFetcher_ExpectSyncSuccess () {
         let data = Data.dataWithLength(10)
-        let key = self.name!
+        let key = self.name
         let fetcher = SimpleFetcher<Data>(key: key, value: data)
         let expectation = self.expectation(description: key)
         sut.set(value: data, key: key)
@@ -357,14 +373,13 @@ class CacheTests: XCTestCase {
     
     func testFetch_AfterSetAndClearingMemoryCache_WithFetcher_ExpectAsyncSuccess () {
         let data = Data.dataWithLength(10)
-        let key = self.name!
+        let key = self.name
         let fetcher = SimpleFetcher<Data>(key: key, value: data)
         let expectation = self.expectation(description: key)
         sut.set(value: data, key: key)
         self.clearMemoryCache()
         
         let fetch = sut.fetch(fetcher: fetcher, success: {
-            XCTAssertTrue($0 != data)
             XCTAssertEqual($0, data)
             expectation.fulfill()
         })
@@ -377,7 +392,7 @@ class CacheTests: XCTestCase {
     }
     
     func testFetch_WithSyncFetcher_ExpectAsyncSuccess () {
-        let key = self.name!
+        let key = self.name
         let data = Data.dataWithLength(11)
         let fetcher = SimpleFetcher<Data>(key: key, value: data)
         let expectation = self.expectation(description: key)
@@ -385,10 +400,10 @@ class CacheTests: XCTestCase {
         let fetch = sut.fetch(fetcher: fetcher, failure : { _ in
             XCTFail("expected success")
             expectation.fulfill()
-        }) {
-            XCTAssertTrue($0 == data)
+        }, success: {
+            XCTAssertEqual($0, data)
             expectation.fulfill()
-        }
+        })
         
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertFalse(fetch.hasFailed)
@@ -398,7 +413,7 @@ class CacheTests: XCTestCase {
     }
     
     func testFetch_WithFetcherAndCustomFormat_ExpectAsyncSuccess () {
-        let key = self.name!
+        let key = self.name
         let data = Data.dataWithLength(12)
         let formattedData = Data.dataWithLength(13)
         let fetcher = SimpleFetcher<Data>(key: key, value: data)
@@ -411,10 +426,10 @@ class CacheTests: XCTestCase {
         let fetch = sut.fetch(fetcher: fetcher, formatName : format.name, failure : { _ in
             XCTFail("expected sucesss")
             expectation.fulfill()
-        }) {
-            XCTAssertTrue($0 == formattedData)
+        }, success: {
+            XCTAssertEqual($0, formattedData)
             expectation.fulfill()
-        }
+        })
         
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertFalse(fetch.hasFailed)
@@ -424,19 +439,24 @@ class CacheTests: XCTestCase {
     }
     
     func testFetch_WithFetcherAndInexistingFormat_ExpectSyncFailure () {
-        let expectation = self.expectation(description: self.name!)
+        let expectation = self.expectation(description: self.name)
         let data = Data.dataWithLength(14)
-        let fetcher = SimpleFetcher<Data>(key: self.name!, value: data)
+        let fetcher = SimpleFetcher<Data>(key: self.name, value: data)
 
-        let fetch = sut.fetch(fetcher: fetcher, formatName: self.name!, failure : { error in
-            XCTAssertEqual(error!._domain, HanekeGlobals.Domain)
-            XCTAssertEqual(error!._code, HanekeGlobals.Cache.ErrorCode.formatNotFound.rawValue)
-            XCTAssertNotNil(error!.localizedDescription)
+        let fetch = sut.fetch(fetcher: fetcher, formatName: self.name, failure : { error in
+            guard let error = error as NSError? else {
+                XCTFail("expected non-nil error");
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error.domain, HanekeGlobals.Domain)
+            XCTAssertEqual(error.code, HanekeGlobals.Cache.ErrorCode.formatNotFound.rawValue)
+            XCTAssertNotNil(error.localizedDescription)
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             XCTFail("expected failure")
             expectation.fulfill()
-        }
+        })
         
         XCTAssertFalse(fetch.hasSucceeded)
         XCTAssertTrue(fetch.hasFailed)
@@ -446,7 +466,7 @@ class CacheTests: XCTestCase {
     // MARK: remove
     
     func testRemove_WithExistingKey() {
-        let key = self.name!
+        let key = self.name
         sut.set(value: Data.dataWithLength(14), key: key)
         let expectation = self.expectation(description: "fetch")
 
@@ -454,16 +474,16 @@ class CacheTests: XCTestCase {
         
         sut.fetch(key: key, failure : { _ in
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             XCTFail("expected failure")
             expectation.fulfill()
-        }
+        })
         self.waitForExpectations(timeout: 1, handler: nil)
     }
     
     func testRemove_WithExistingKeyInFormat() {
-        let key = self.name!
-        let format = Format<Data>(name: self.name!)
+        let key = self.name
+        let format = Format<Data>(name: self.name)
         sut.addFormat(format)
         sut.set(value:  Data.dataWithLength(15), key: key, formatName: format.name)
         let expectation = self.expectation(description: "fetch")
@@ -472,15 +492,15 @@ class CacheTests: XCTestCase {
         
         sut.fetch(key: key, formatName: format.name, failure : { _ in
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             XCTFail("expected failure")
             expectation.fulfill()
-        }
+        })
         self.waitForExpectations(timeout: 1, handler: nil)
     }
     
     func testRemove_WithExistingKeyInAnotherFormat() {
-        let key = self.name!
+        let key = self.name
         let format = Format<Data>(name: key)
         sut.addFormat(format)
         sut.set(value: Data.dataWithLength(16), key: key)
@@ -491,14 +511,14 @@ class CacheTests: XCTestCase {
         sut.fetch(key: key, failure : { _ in
             XCTFail("expected success")
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             expectation.fulfill()
-        }
+        })
         self.waitForExpectations(timeout: 1, handler: nil)
     }
     
     func testRemove_WithExistingKeyAndInexistingFormat() {
-        let key = self.name!
+        let key = self.name
         sut.set(value: Data.dataWithLength(17), key: key)
         let expectation = self.expectation(description: "fetch")
         
@@ -507,20 +527,20 @@ class CacheTests: XCTestCase {
         sut.fetch(key: key, failure : { _ in
             XCTFail("expected success")
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             expectation.fulfill()
-        }
+        })
         self.waitForExpectations(timeout: 1, handler: nil)
     }
     
     func testRemove_WithInexistingKey() {
-        sut.remove(key: self.name!)
+        sut.remove(key: self.name)
     }
     
     // MARK: removeAll
     
     func testRemoveAll_AfterOne() {
-        let key = self.name!
+        let key = self.name
         sut.set(value: Data.dataWithLength(18), key: key)
         let expectation = self.expectation(description: "fetch")
         
@@ -528,15 +548,15 @@ class CacheTests: XCTestCase {
         
         sut.fetch(key: key, failure : { _ in
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             XCTFail("expected failure")
             expectation.fulfill()
-        }
+        })
         self.waitForExpectations(timeout: 1, handler: nil)
     }
 
     func testRemoveAll_Completion() {
-        let key = self.name!
+        let key = self.name
         sut.set(value: Data.dataWithLength(18), key: key)
         let expectation = self.expectation(description: "removeAll")
         var completed = false
@@ -569,7 +589,7 @@ class CacheTests: XCTestCase {
     }
     
     func testOnMemoryWarning() {
-        let key = self.name!
+        let key = self.name
         let data = Data.dataWithLength(18)
         sut.set(value: data, key: key)
         let expectation = self.expectation(description: "fetch")
@@ -579,9 +599,9 @@ class CacheTests: XCTestCase {
         let fetch = sut.fetch(key: key, failure : { _ in
             XCTFail("expected success")
             expectation.fulfill()
-        }) { _ in
+        }, success: { _ in
             expectation.fulfill()
-        }
+        })
         XCTAssertFalse(fetch.hasSucceeded)
         self.waitForExpectations(timeout: 1, handler: nil)
     }
@@ -589,7 +609,7 @@ class CacheTests: XCTestCase {
     func testUIApplicationDidReceiveMemoryWarningNotification() {
         let expectation = self.expectation(description: "onMemoryWarning")
         
-        let sut = CacheMock<UIImage>(name: self.name!)
+        let sut = CacheMock<UIImage>(name: self.name)
         sut.expectation = expectation // XCode crashes if we use the original expectation directly
         
         NotificationCenter.default.post(name: NSNotification.Name.UIApplicationDidReceiveMemoryWarning, object: nil)
@@ -610,7 +630,7 @@ class ImageCacheTests: XCTestCase {
     
     override func setUp() {
         super.setUp()
-        sut = Cache<UIImage>(name: self.name!)
+        sut = Cache<UIImage>(name: self.name)
     }
     
     override func tearDown() {
@@ -619,7 +639,7 @@ class ImageCacheTests: XCTestCase {
     }
     
     func testSet_ExpectAsyncDecompressedImage() {
-        let key = self.name!
+        let key = self.name
         sut = Cache<UIImage>(name: key)
         let image = UIImage.imageWithColor(UIColor.green)
         let expectation = self.expectation(description: key)
@@ -638,7 +658,7 @@ class ImageCacheTests: XCTestCase {
     
     func testFetchOnSuccess_AfterSet_WithKey_ExpectSyncDecompressedImage () {
         let image = UIImage.imageWithColor(UIColor.cyan)
-        let key = self.name!
+        let key = self.name
         let expectation = self.expectation(description: key)
         sut.set(value: image, key: key, success: { decompressedImage in
             
@@ -663,7 +683,7 @@ class FailFetcher<T : DataConvertible> : Fetcher<T> {
         super.init(key: key)
     }
     
-    func fetch(failure fail : ((Error?) -> ()), success succeed : (T.Result) -> ()) {
+    override func fetch(failure fail : @escaping ((Error?) -> ()), success succeed : @escaping (T.Result) -> ()) {
         fail(error)
     }
     
